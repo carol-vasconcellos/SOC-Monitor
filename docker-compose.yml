@@ -1,0 +1,31 @@
+# docker-compose.yml
+version: '3.9'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+
+  redis:
+    image: redis:alpine
+
+  worker:
+    build: .
+    command: celery -A socmonitor worker -l info
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+
+  beat:
+    build: .
+    command: celery -A socmonitor beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
