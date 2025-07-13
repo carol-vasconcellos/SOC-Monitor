@@ -1,5 +1,0 @@
-Django>=4.2
-ping3
-celery
-redis
-django-celery-beat
