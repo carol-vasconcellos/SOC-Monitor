@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>MonitorNet - Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <div class="container mt-5">
+        <h1 class="mb-4">📡 Monitoramento de Rede</h1>
+        {% if ddos_detected %}
+            <div class="alert alert-danger">🚨 Possível ataque DDoS detectado!</div>
+        {% endif %}
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card text-white bg-primary mb-3">
+                    <div class="card-header">Bytes Enviados</div>
+                    <div class="card-body">
+                        <h5 class="card-title">{{ bytes_sent }}</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card text-white bg-success mb-3">
+                    <div class="card-header">Bytes Recebidos</div>
+                    <div class="card-body">
+                        <h5 class="card-title">{{ bytes_recv }}</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card text-white bg-warning mb-3">
+                    <div class="card-header">Pacotes Enviados</div>
+                    <div class="card-body">
+                        <h5 class="card-title">{{ packets_sent }}</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card text-white bg-dark mb-3">
+                    <div class="card-header">Pacotes Recebidos</div>
+                    <div class="card-body">
+                        <h5 class="card-title">{{ packets_recv }}</h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
