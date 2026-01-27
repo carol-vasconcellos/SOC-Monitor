@@ -3,9 +3,10 @@ import hashlib
 import requests
 import os
 import logging
+import random
 from threading import Thread
 from datetime import datetime
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -37,6 +38,22 @@ def get_file_hash(path):
         return sha256_hash.hexdigest()
     except:
         return None
+
+# --- NOVA ROTA PARA RECEBER ATAQUES EXTERNOS ---
+@app.route('/api/inject', methods=['POST'])
+def inject_alert():
+    data = request.get_json()
+    alert_type = data.get("type", "REMOTO")
+    msg = data.get("message", "Alerta recebido via API")
+    
+    new_alert = {
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "type": alert_type,
+        "message": msg
+    }
+    alerts_history.insert(0, new_alert)
+    logging.info(f"[EXTERNAL-{alert_type}] {msg}")
+    return jsonify({"status": "success"}), 200
 
 class DashboardHandler(FileSystemEventHandler):
     def __init__(self):
@@ -85,13 +102,11 @@ def run_monitor():
     except: observer.stop()
 
 if __name__ == "__main__":
-    # O Render define a porta automaticamente na variável de ambiente PORT
     port = int(os.environ.get("PORT", 5000))
     
-    # Inicia o monitor em background
+    # Inicia o monitor local do servidor
     monitor_thread = Thread(target=run_monitor)
     monitor_thread.daemon = True
     monitor_thread.start()
     
-    # IMPORTANTE: host="0.0.0.0" permite que o Render encontre o app
     app.run(host="0.0.0.0", port=port)
