@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-# Configurações Iniciais
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -22,9 +21,15 @@ ATTACK_COUNTER = {}
 app = Flask(__name__)
 alerts_history = [] 
 
-# Configuração de Log aprimorada para clareza
-logging.basicConfig(filename='soc_audit.log', level=logging.INFO, 
-                    format='%(asctime)s | %(levelname)s | %(message)s')
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR) 
+
+logging.basicConfig(
+    filename='soc_audit.log', 
+    level=logging.INFO, 
+    format='%(message)s', 
+    encoding='utf-8'
+)
 
 def send_telegram_alert(message):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -32,21 +37,26 @@ def send_telegram_alert(message):
     try:
         requests.post(url, json=payload, timeout=5)
     except Exception as e:
-        logging.error(f"Erro Telegram: {e}")
+        pass 
 
 def add_full_alert(alert_type, message):
-    """Função central para garantir que Telegram, Dashboard e Logs recebam TUDO."""
+   
     timestamp = datetime.now().strftime("%H:%M:%S")
-    alert_entry = {"time": timestamp, "type": alert_type, "message": message}
     
-    # 1. Dashboard
+    clean_msg = f"[{timestamp}] {alert_type}: {message}"
+    
+    alert_entry = {
+        "time": timestamp, 
+        "type": alert_type, 
+        "message": message
+    }
     alerts_history.insert(0, alert_entry)
-    # 2. Log de Auditoria
-    logging.info(f"[{alert_type}] {message}")
-    # 3. Telegram
-    send_telegram_alert(f"[{alert_type}] {message}")
-    # 4. Console
-    print(f"[{timestamp}] {alert_type}: {message}")
+    
+    logging.info(clean_msg)
+    
+    send_telegram_alert(clean_msg)
+    
+    print(f"SOC ACTION -> {clean_msg}")
 
 @app.before_request
 def firewall_check():
@@ -61,7 +71,7 @@ def monitor_and_block_ip(ip):
     if ATTACK_COUNTER[ip] >= 3:
         if ip not in BANNED_IPS:
             BANNED_IPS.add(ip)
-            msg = f"🚫 FIREWALL: IP {ip} BANIDO permanentemente após {ATTACK_COUNTER[ip]} ataques."
+            msg = f"🚫 FIREWALL: IP {ip} BANIDO após {ATTACK_COUNTER[ip]} ataques."
             add_full_alert("FIREWALL", msg)
 
 def get_file_hash(path):
@@ -86,7 +96,7 @@ def inject_alert():
             monitor_and_block_ip(client_ip)
 
         add_full_alert(alert_type, msg)
-        return jsonify({"status": "success", "info": "SOC processando ameaça"}), 200
+        return jsonify({"status": "success"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -94,20 +104,18 @@ class DashboardHandler(FileSystemEventHandler):
     def on_created(self, event):
         if not event.is_directory:
             fname = os.path.basename(event.src_path)
-            add_full_alert("INTRUSÃO", f"Arquivo suspeito detectado: {fname}. Iniciando limpeza...")
+            add_full_alert("INTRUSÃO", f"🚨 Ameaça detectada: {fname}")
+            
             time.sleep(1.5) 
             try:
                 os.remove(event.src_path)
-                add_full_alert("REMEDIAÇÃO", f"🛡️ Sucesso: {fname} foi removido e a ameaça neutralizada.")
-            except Exception as e:
-                add_full_alert("FALHA", f"Não foi possível remover {fname}: {e}")
+                add_full_alert("REMEDIAÇÃO", f"🛡️ Expulsão concluída: {fname} removido.")
+            except:
+                add_full_alert("FALHA", f"Não foi possível remover {fname}")
 
     def on_modified(self, event):
         if not event.is_directory:
-            add_full_alert("MODIFICAÇÃO", f"Integridade violada no arquivo: {os.path.basename(event.src_path)}")
-
-    def on_deleted(self, event):
-        add_full_alert("CRÍTICO", f"Arquivo de sistema removido: {os.path.basename(event.src_path)}")
+            add_full_alert("MODIFICAÇÃO", f"Arquivo alterado: {os.path.basename(event.src_path)}")
 
 @app.route('/api/logs')
 def get_logs():
@@ -115,8 +123,9 @@ def get_logs():
         if os.path.exists('soc_audit.log'):
             with open('soc_audit.log', 'r', encoding='utf-8', errors='replace') as f:
                 logs = f.readlines()
-                return jsonify([line.strip() for line in logs[-20:]])
-        return jsonify(["[SISTEMA] Aguardando geração de logs..."])
+                
+                return jsonify([line.strip() for line in logs[-20:] if line.strip()])
+        return jsonify(["[SISTEMA] Aguardando eventos maliciosos..."])
     except Exception as e:
         return jsonify([f"Erro ao ler logs: {str(e)}"])
 
@@ -130,7 +139,7 @@ def get_alerts(): return jsonify(alerts_history)
 def reset_firewall():
     BANNED_IPS.clear()
     ATTACK_COUNTER.clear()
-    return "🛡️ Firewall Resetado! IPs liberados para novos testes.", 200
+    return "🛡️ Firewall Resetado! IPs liberados.", 200
 
 def run_monitor():
     if not os.path.exists(TARGET_DIR): os.makedirs(TARGET_DIR)
