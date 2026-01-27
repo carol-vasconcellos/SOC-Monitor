@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-# Configurações Iniciais
+
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -37,7 +37,7 @@ def monitor_and_block_ip(ip):
         if ip not in BANNED_IPS:
             BANNED_IPS.add(ip)
             msg = f"🚫 FIREWALL: IP {ip} bloqueado após {ATTACK_COUNTER[ip]} tentativas de ataque."
-            #alerts_history.insert(0, {"time": datetime.now().strftime("%H:%M:%S"), "type": "FIREWALL", "message": msg})
+           
             send_telegram_alert(msg)
             print(f"\n[!] {msg}\n")
 
@@ -67,12 +67,12 @@ def inject_alert():
         alert_type = data.get("type", "REMOTO")
         msg = data.get("message", "Alerta recebido")
         
-        # Monitora se é um ataque para possível bloqueio
+        
         if alert_type in ["ATAQUE", "RANSOMWARE", "INFILTRAÇÃO"]:
             monitor_and_block_ip(client_ip)
 
         new_alert = {"time": datetime.now().strftime("%H:%M:%S"), "type": alert_type, "message": msg}
-        # alerts_history definido globalmente no seu código original
+        
         alerts_history.insert(0, new_alert)
         
         return jsonify({"status": "success", "info": "SOC monitorando sua atividade"}), 200
@@ -88,25 +88,25 @@ class DashboardHandler(FileSystemEventHandler):
         alerts_history.insert(0, alert) 
         logging.info(f"[{type}] {msg}")
 
-    # RESPOSTA ATIVA: Detecta criação e deleta o "malware"
+    
     def on_created(self, event):
         if not event.is_directory:
             fname = os.path.basename(event.src_path)
             
-            # 1. Alerta de Detecção
+            
             self.add_alert("INTRUSÃO", f"🚨 Ameaça detectada: {fname}. Analisando comportamento...")
             send_telegram_alert(f"🚨 INTRUSO DETECTADO: {fname}. Iniciando protocolo de expulsão!")
 
-            # 2. Ação de Expulsão (Remediação)
-            time.sleep(1.5) # Simula o tempo de reação do sistema
+            
+            time.sleep(1.5) 
             try:
                 os.remove(event.src_path)
                 
-                # 3. Confirmação de Sucesso (Isso deve aparecer no seu Dashboard)
+               
                 msg_sucesso = f"🛡️ SISTEMA IMUNE: O arquivo {fname} foi destruído e o intruso expulso."
                 self.add_alert("REMEDIAÇÃO", msg_sucesso)
                 send_telegram_alert(f"✅ PROTOCOLO CONCLUÍDO: {fname} removido. Host limpo.")
-                print(f"[SOC ACTIVE RESPONSE] {msg_sucesso}") # Aparece no terminal do SOC
+                print(f"[SOC ACTIVE RESPONSE] {msg_sucesso}") 
             except Exception as e:
                 self.add_alert("FALHA", f"❌ Falha ao expulsar intruso: {fname}")
 
@@ -117,7 +117,7 @@ class DashboardHandler(FileSystemEventHandler):
                 msg = f"Integridade Violada: {os.path.basename(event.src_path)}"
                 self.add_alert("MODIFICAÇÃO", msg)
                 send_telegram_alert(f"{msg}. Tentando reverter alteração...")
-                # Aqui você poderia adicionar um código para sobrescrever com um backup
+                
                 self.hashes[event.src_path] = new_hash
 
     def on_deleted(self, event):
