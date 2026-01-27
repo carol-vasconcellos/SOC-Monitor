@@ -1,66 +1,69 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SOC Dashboard</title>
-    <meta http-equiv="refresh" content="5"> <style>
+    <style>
         body { background: #1a1a1a; color: #00ff00; font-family: 'Courier New'; padding: 20px; }
+        .nav-buttons { margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        button { 
+            background: #262626; color: #00ff00; border: 1px solid #00ff00; 
+            padding: 10px 20px; cursor: pointer; font-family: 'Courier New';
+        }
+        button.active { background: #00ff00; color: #000; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
         .alert-card { border-left: 5px solid #ff0000; background: #262626; margin: 10px 0; padding: 15px; }
-        .time { color: #888; font-size: 0.8em; }
-        .type-MODIFICAÇÃO { color: #ffa500; }
-        .type-CRÍTICO { color: #ff0000; font-weight: bold; }
+        .log-container { background: #000; padding: 15px; height: 500px; overflow-y: auto; color: #aaa; font-size: 0.9em; }
+        .time { color: #888; }
     </style>
 </head>
 <body>
-    <h1>🛡️ SOC MONITORING DASHBOARD</h1>
-    
-    <div style="display: flex; gap: 20px;">
-        <div style="flex: 1;">
-            <h2>🚨 ALERTAS ATIVOS</h2>
-            <div id="alerts"></div>
-        </div>
+    <h1>🛡️ SOC MONITORING SYSTEM</h1>
 
-        <div style="flex: 1; border-left: 1px solid #333; padding-left: 20px;">
-            <h2>📜 LOGS DE AUDITORIA (soc_audit.log)</h2>
-            <div id="logs" style="font-size: 0.85em; color: #aaa; background: #000; padding: 10px; height: 500px; overflow-y: auto;">
-                </div>
-        </div>
+    <div class="nav-buttons">
+        <button id="btn-alerts" class="active" onclick="showTab('alerts')">🚨 ALERTAS ATIVOS</button>
+        <button id="btn-logs" onclick="showTab('logs')">📜 LOGS DE AUDITORIA</button>
+        <a href="/api/reset_firewall" target="_blank"><button style="border-color: #ff0000; color: #ff0000;">🔓 RESET IP</button></a>
+    </div>
+
+    <div id="tab-alerts" class="tab-content active">
+        <div id="alerts-list"></div>
+    </div>
+
+    <div id="tab-logs" class="tab-content">
+        <div id="logs-list" class="log-container"></div>
     </div>
 
     <script>
-        // Função para carregar Alertas (sua função original)
-        async function loadAlerts() {
-            const response = await fetch('/api/alerts');
-            const data = await response.json();
-            const div = document.getElementById('alerts');
-            div.innerHTML = data.map(a => `
+        function showTab(tabName) {
+            // Alterna visibilidade das divs
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + tabName).classList.add('active');
+            
+            // Alterna estilo dos botões
+            document.querySelectorAll('button').forEach(el => el.classList.remove('active'));
+            document.getElementById('btn-' + tabName).classList.add('active');
+        }
+
+        async function updateData() {
+            // Atualiza Alertas
+            const resAlerts = await fetch('/api/alerts');
+            const alerts = await resAlerts.json();
+            document.getElementById('alerts-list').innerHTML = alerts.map(a => `
                 <div class="alert-card">
-                    <span class="time">[${a.time}]</span> 
-                    <span class="type-${a.type}">${a.type}</span>: ${a.message}
+                    <span class="time">[${a.time}]</span> <b>${a.type}</b>: ${a.message}
                 </div>
             `).join('');
+
+            // Atualiza Logs
+            const resLogs = await fetch('/api/logs');
+            const logs = await resLogs.json();
+            document.getElementById('logs-list').innerHTML = logs.map(l => `<div>> ${l}</div>`).join('');
         }
 
-        // NOVA FUNÇÃO: Carregar Logs do arquivo
-        async function loadLogs() {
-            const response = await fetch('/api/logs');
-            const data = await response.json();
-            const div = document.getElementById('logs');
-            // Formata as linhas de log para visualização
-            div.innerHTML = data.map(line => `<div>> ${line}</div>`).join('');
-            // Auto-scroll para o final do log
-            div.scrollTop = div.scrollHeight;
-        }
-
-        // Atualização contínua
-        setInterval(() => {
-            loadAlerts();
-            loadLogs();
-        }, 2000);
-
-        loadAlerts();
-        loadLogs();
+        setInterval(updateData, 2000);
+        updateData();
     </script>
 </body>
 </html>

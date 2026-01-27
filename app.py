@@ -130,12 +130,12 @@ class DashboardHandler(FileSystemEventHandler):
 @app.route('/api/logs')
 def get_logs():
     try:
-       
         if os.path.exists('soc_audit.log'):
-            with open('soc_audit.log', 'r') as f:
+            
+            with open('soc_audit.log', 'r', encoding='utf-8', errors='replace') as f:
                 logs = f.readlines()
-                return jsonify(logs[-20:]) 
-        return jsonify(["Arquivo de log ainda não criado."])
+                return jsonify(logs[-20:])
+        return jsonify(["Arquivo de log vazio."])
     except Exception as e:
         return jsonify([f"Erro ao ler logs: {str(e)}"])
 
