@@ -79,3 +79,5 @@ Este projeto reflete competências essenciais para **Engenharia de Redes e Segur
 * **Defesa Ativa:** Implementação de controles de monitoramento de integridade (FIM).
 * **Automação de Resposta:** Redução do tempo de detecção e resposta (MTTD/MTTR) através de alertas automatizados no Telegram.
 * **Visibilidade de Operações (NOC/SOC):** Criação de dashboards para gestão de incidentes.
+
+Confira: https://soc-monitor.onrender.com
