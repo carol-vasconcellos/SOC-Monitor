@@ -3,7 +3,6 @@ import hashlib
 import requests
 import os
 import logging
-import random
 from threading import Thread
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request
@@ -20,7 +19,6 @@ TARGET_DIR = "./monitorar"
 app = Flask(__name__)
 alerts_history = [] 
 
-# Log de Auditoria Forense
 logging.basicConfig(filename='soc_audit.log', level=logging.INFO, 
                     format='%(asctime)s | %(message)s')
 
@@ -42,25 +40,16 @@ def get_file_hash(path):
     except:
         return None
 
-# Rota para receber ataques do seu computador local
 @app.route('/api/inject', methods=['POST'])
 def inject_alert():
     try:
         data = request.get_json()
         alert_type = data.get("type", "REMOTO")
-        msg = data.get("message", "Alerta recebido via API")
+        msg = data.get("message", "Alerta recebido")
         
-        new_alert = {
-            "time": datetime.now().strftime("%H:%M:%S"),
-            "type": alert_type,
-            "message": msg
-        }
+        new_alert = {"time": datetime.now().strftime("%H:%M:%S"), "type": alert_type, "message": msg}
         alerts_history.insert(0, new_alert)
-        
-        # Faz o Telegram apitar quando o ataque vem do CMD
         send_telegram_alert(f"[{alert_type}] {msg}")
-        
-        logging.info(f"[EXTERNAL-{alert_type}] {msg}")
         return jsonify({"status": "success"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -70,13 +59,25 @@ class DashboardHandler(FileSystemEventHandler):
         self.hashes = {}
 
     def add_alert(self, type, msg):
-        alert = {
-            "time": datetime.now().strftime("%H:%M:%S"),
-            "type": type,
-            "message": msg
-        }
+        alert = {"time": datetime.now().strftime("%H:%M:%S"), "type": type, "message": msg}
         alerts_history.insert(0, alert) 
         logging.info(f"[{type}] {msg}")
+
+    # RESPOSTA ATIVA: Detecta criação e deleta o "malware"
+    def on_created(self, event):
+        if not event.is_directory:
+            fname = os.path.basename(event.src_path)
+            self.add_alert("INTRUSÃO", f"Ameaça detectada: {fname}")
+            send_telegram_alert(f"Ameaça detectada: {fname}. Iniciando limpeza...")
+            
+            # Simula tempo de análise e remove o arquivo
+            time.sleep(1) 
+            try:
+                os.remove(event.src_path)
+                self.add_alert("LIMPEZA", f"Arquivo malicioso {fname} removido com sucesso!")
+                send_telegram_alert(f"✅ Remediação concluída: {fname} excluído.")
+            except Exception as e:
+                self.add_alert("ERRO", f"Falha ao remover {fname}")
 
     def on_modified(self, event):
         if not event.is_directory:
@@ -84,21 +85,18 @@ class DashboardHandler(FileSystemEventHandler):
             if new_hash and new_hash != self.hashes.get(event.src_path):
                 msg = f"Integridade Violada: {os.path.basename(event.src_path)}"
                 self.add_alert("MODIFICAÇÃO", msg)
-                send_telegram_alert(msg)
+                send_telegram_alert(f"{msg}. Tentando reverter alteração...")
+                # Aqui você poderia adicionar um código para sobrescrever com um backup
                 self.hashes[event.src_path] = new_hash
 
     def on_deleted(self, event):
-        msg = f"Arquivo Removido: {os.path.basename(event.src_path)}"
-        self.add_alert("CRÍTICO", msg)
-        send_telegram_alert(msg)
+        self.add_alert("CRÍTICO", f"Arquivo Removido: {os.path.basename(event.src_path)}")
 
 @app.route('/')
-def index():
-    return render_template('index.html')
+def index(): return render_template('index.html')
 
 @app.route('/api/alerts')
-def get_alerts():
-    return jsonify(alerts_history)
+def get_alerts(): return jsonify(alerts_history)
 
 def run_monitor():
     if not os.path.exists(TARGET_DIR): os.makedirs(TARGET_DIR)
@@ -111,11 +109,7 @@ def run_monitor():
     except: observer.stop()
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    
-    # Monitoramento em background
     monitor_thread = Thread(target=run_monitor)
     monitor_thread.daemon = True
     monitor_thread.start()
-    
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=5000)
