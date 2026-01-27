@@ -28,6 +28,10 @@ logging.basicConfig(filename='soc_audit.log', level=logging.INFO,
 @app.before_request
 def firewall_check():
     client_ip = request.remote_addr
+    
+    if request.path == '/api/reset_firewall':
+        return None 
+        
     if client_ip in BANNED_IPS:
         return jsonify({"error": "IP BLOQUEADO PELO SOC", "reason": "Atividade Maliciosa Detectada"}), 403
 
@@ -122,6 +126,18 @@ class DashboardHandler(FileSystemEventHandler):
 
     def on_deleted(self, event):
         self.add_alert("CRÍTICO", f"Arquivo Removido: {os.path.basename(event.src_path)}")
+
+@app.route('/api/logs')
+def get_logs():
+    try:
+       
+        if os.path.exists('soc_audit.log'):
+            with open('soc_audit.log', 'r') as f:
+                logs = f.readlines()
+                return jsonify(logs[-20:]) 
+        return jsonify(["Arquivo de log ainda não criado."])
+    except Exception as e:
+        return jsonify([f"Erro ao ler logs: {str(e)}"])
 
 @app.route('/')
 def index(): return render_template('index.html')
