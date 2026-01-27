@@ -1,139 +1,35 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SOC Dashboard - Monitoramento</title>
-    <style>
-        body { 
-            background: #0f0f0f; 
-            color: #00ff41; 
-            font-family: 'Courier New', Courier, monospace; 
-            padding: 20px; 
-            margin: 0;
-        }
-        
-        h1 { text-align: center; border-bottom: 2px solid #00ff41; padding-bottom: 10px; }
-
-        /* Estilo das Abas */
-        .tabs { display: flex; justify-content: center; margin-bottom: 20px; gap: 10px; }
-        
-        .tab-btn {
-            background: #222;
-            color: #00ff41;
-            border: 1px solid #00ff41;
-            padding: 10px 25px;
-            cursor: pointer;
-            font-size: 1.1em;
-            transition: 0.3s;
-        }
-
-        .tab-btn.active { background: #00ff41; color: #000; font-weight: bold; }
-        .tab-btn:hover { background: #008f11; color: #fff; }
-
-        .tab-content { display: none; animation: fadeIn 0.5s; }
-        .tab-content.active { display: block; }
-
-        /* Estilo dos Cards de Alerta */
-        .alert-card { 
-            background: #1a1a1a; 
-            margin: 10px 0; 
-            padding: 15px; 
-            border-left: 5px solid #ff0000; /* Padrão: Vermelho */
-            box-shadow: 0 0 10px rgba(255, 0, 0, 0.1);
-        }
-
-        /* Status RESOLVED: Muda para Verde */
-        .alert-card.status-RESOLVED { 
-            border-left: 5px solid #00ff41; 
-            opacity: 0.7; 
-            box-shadow: 0 0 10px rgba(0, 255, 65, 0.1);
-        }
-
-        .time { color: #888; font-size: 0.9em; }
-        .severity-CRITICAL { color: #ff3333; text-shadow: 0 0 5px #ff0000; }
-        .severity-HIGH { color: #ff9900; }
-        
-        /* Estilo do Log Forense */
-        .log-entry {
-            font-size: 0.85em;
-            border-bottom: 1px solid #333;
-            padding: 5px 0;
-            color: #ccc;
-        }
-
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    <title>SOC Dashboard</title>
+    <meta http-equiv="refresh" content="5"> <style>
+        body { background: #1a1a1a; color: #00ff00; font-family: 'Courier New'; padding: 20px; }
+        .alert-card { border-left: 5px solid #ff0000; background: #262626; margin: 10px 0; padding: 15px; }
+        .time { color: #888; font-size: 0.8em; }
+        .type-MODIFICAÇÃO { color: #ffa500; }
+        .type-CRÍTICO { color: #ff0000; font-weight: bold; }
     </style>
 </head>
 <body>
-
-    <h1>🛡️ SOC TERMINAL v2.0</h1>
-
-    <div class="tabs">
-        <button class="tab-btn active" onclick="openTab(event, 'tab-alerts')">⚠️ ALERTAS ATIVOS</button>
-        <button class="tab-btn" onclick="openTab(event, 'tab-logs')">📄 LOGS FORENSES</button>
-    </div>
-
-    <div id="tab-alerts" class="tab-content active">
-        <div id="alerts-container">
-            <p>Aguardando telemetria...</p>
+    <h1>🛡️ SOC MONITORING DASHBOARD</h1>
+    <div id="alerts">
         </div>
-    </div>
-
-    <div id="tab-logs" class="tab-content">
-        <div id="logs-container">
-            </div>
-    </div>
-
     <script>
-        // Função para alternar entre as abas
-        function openTab(evt, tabName) {
-            let i, tabcontent, tablinks;
-            tabcontent = document.getElementsByClassName("tab-content");
-            for (i = 0; i < tabcontent.length; i++) {
-                tabcontent[i].classList.remove("active");
-            }
-            tablinks = document.getElementsByClassName("tab-btn");
-            for (i = 0; i < tablinks.length; i++) {
-                tablinks[i].classList.remove("active");
-            }
-            document.getElementById(tabName).classList.add("active");
-            evt.currentTarget.classList.add("active");
+        async function loadAlerts() {
+            const response = await fetch('/api/alerts');
+            const data = await response.json();
+            const div = document.getElementById('alerts');
+            div.innerHTML = data.map(a => `
+                <div class="alert-card">
+                    <span class="time">[${a.time}]</span> 
+                    <span class="type-${a.type}">${a.type}</span>: ${a.message}
+                </div>
+            `).join('');
         }
-
-        async function updateDashboard() {
-            try {
-                const response = await fetch('/api/alerts');
-                const data = await response.json();
-                
-                const alertsDiv = document.getElementById('alerts-container');
-                const logsDiv = document.getElementById('logs-container');
-
-                // Renderiza Alertas (Focado em quem está ACTIVE)
-                alertsDiv.innerHTML = data.map(a => `
-                    <div class="alert-card status-${a.status}">
-                        <span class="time">[${a.time}]</span> 
-                        <span class="severity-${a.severity}">[${a.severity}]</span>
-                        <strong>${a.type}</strong>: ${a.message}
-                        <span style="float: right; font-size: 0.7em;">${a.status}</span>
-                    </div>
-                `).join('');
-
-                // Renderiza Logs (Uma linha por evento para histórico)
-                logsDiv.innerHTML = data.map(a => `
-                    <div class="log-entry">
-                        [${a.time}] - EVENTO: ${a.type} - STATUS: ${a.status} - MSG: ${a.message}
-                    </div>
-                `).join('');
-
-            } catch (error) {
-                console.error("Erro ao carregar dados do SOC:", error);
-            }
-        }
-
-        // Atualização em tempo real (2 segundos)
-        setInterval(updateDashboard, 2000);
-        updateDashboard();
+        setInterval(loadAlerts, 2000); // Atualiza a lista via API
+        loadAlerts();
     </script>
 </body>
 </html>

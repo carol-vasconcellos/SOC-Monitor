@@ -1,119 +1,121 @@
-import logging
+import time
+import hashlib
 import requests
+import os
+import logging
+import random
+from threading import Thread
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
-import os
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
-# ================= CONFIG =================
+# Configurações Iniciais
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TARGET_DIR = "./monitorar"
 
 app = Flask(__name__)
+alerts_history = [] 
 
-# Lista que armazena os alertas (histórico e estado atual)
-alerts_history = []
+# Log de Auditoria Forense
+logging.basicConfig(filename='soc_audit.log', level=logging.INFO, 
+                    format='%(asctime)s | %(message)s')
 
-# ================= LOG FORENSE =================
-# O log registra tanto ataques quanto remediações para fins de auditoria
-logging.basicConfig(
-    filename="soc_audit.log",
-    level=logging.INFO,
-    format="%(asctime)s | %(message)s"
-)
-
-# ================= TELEGRAM =================
-def send_telegram_alert(msg):
-    if not TOKEN or not CHAT_ID:
-        return
+def send_telegram_alert(message):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": f"⚠️ SOC ALERT:\n{message}"}
     try:
-        requests.post(url, json={
-            "chat_id": CHAT_ID,
-            "text": f"🚨 SOC ALERT\n{msg}"
-        }, timeout=5)
+        requests.post(url, json=payload, timeout=5)
     except Exception as e:
-        print(f"Erro Telegram: {e}")
+        logging.error(f"Erro Telegram: {e}")
 
-# ================= CORE SOC =================
-def register_alert(alert_type, message, severity="MEDIUM"):
-    alert = {
-        "id": len(alerts_history) + 1,
-        "time": datetime.now().strftime("%H:%M:%S"),
-        "type": alert_type,
-        "severity": severity,
-        "message": message,
-        "status": "ACTIVE" # Todo alerta nasce como Ativo
-    }
-    # Insere no topo da lista para aparecer primeiro no dashboard
-    alerts_history.insert(0, alert)
+def get_file_hash(path):
+    sha256_hash = hashlib.sha256()
+    try:
+        with open(path, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+    except:
+        return None
 
-    log_msg = f"[{severity}] [{alert_type}] {message}"
-    logging.info(log_msg)
+# Rota para receber ataques do seu computador local
+@app.route('/api/inject', methods=['POST'])
+def inject_alert():
+    try:
+        data = request.get_json()
+        alert_type = data.get("type", "REMOTO")
+        msg = data.get("message", "Alerta recebido via API")
+        
+        new_alert = {
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "type": alert_type,
+            "message": msg
+        }
+        alerts_history.insert(0, new_alert)
+        
+        # Faz o Telegram apitar quando o ataque vem do CMD
+        send_telegram_alert(f"[{alert_type}] {msg}")
+        
+        logging.info(f"[EXTERNAL-{alert_type}] {msg}")
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
-    if severity in ["HIGH", "CRITICAL"]:
-        send_telegram_alert(log_msg)
+class DashboardHandler(FileSystemEventHandler):
+    def __init__(self):
+        self.hashes = {}
 
-# ================= API DE ATAQUE =================
-@app.route("/api/attack", methods=["POST"])
-def receive_attack():
-    data = request.get_json()
-    attack_type = data.get("type")
-    target = data.get("target", "cloud-app")
+    def add_alert(self, type, msg):
+        alert = {
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "type": type,
+            "message": msg
+        }
+        alerts_history.insert(0, alert) 
+        logging.info(f"[{type}] {msg}")
 
-    if attack_type == "RANSOMWARE":
-        register_alert("RANSOMWARE", f"Tentativa de criptografia no serviço {target}", "CRITICAL")
+    def on_modified(self, event):
+        if not event.is_directory:
+            new_hash = get_file_hash(event.src_path)
+            if new_hash and new_hash != self.hashes.get(event.src_path):
+                msg = f"Integridade Violada: {os.path.basename(event.src_path)}"
+                self.add_alert("MODIFICAÇÃO", msg)
+                send_telegram_alert(msg)
+                self.hashes[event.src_path] = new_hash
 
-    elif attack_type == "FIM":
-        register_alert("FILE INTEGRITY", f"Violação de integridade detectada em {target}", "HIGH")
+    def on_deleted(self, event):
+        msg = f"Arquivo Removido: {os.path.basename(event.src_path)}"
+        self.add_alert("CRÍTICO", msg)
+        send_telegram_alert(msg)
 
-    elif attack_type == "BRUTE_FORCE":
-        register_alert("BRUTE FORCE", f"Múltiplas tentativas de login no serviço {target}", "HIGH")
-
-    elif attack_type == "DDoS":
-        register_alert("DDoS", f"Pico anormal de requisições no endpoint {target}", "CRITICAL")
-
-    # Novo ataque de arquivo/exfiltração
-    elif attack_type == "FILE_EXFILTRATION":
-        register_alert("FILE_EXFIL", f"Upload/Exfiltração de arquivos sensíveis em {target}", "HIGH")
-
-    else:
-        register_alert("UNKNOWN", f"Evento suspeito recebido para {target}", "LOW")
-
-    return jsonify({"status": "received", "type": attack_type})
-
-# ================= API DE REMOÇÃO (REMEDIAÇÃO) =================
-@app.route("/api/remediate", methods=["POST"])
-def remediate():
-    data = request.get_json()
-    target_type = data.get("type")
-    
-    count = 0
-    for alert in alerts_history:
-        # Se encontrarmos alertas ativos do tipo especificado, "limpamos" eles
-        if alert["type"] == target_type and alert["status"] == "ACTIVE":
-            alert["status"] = "RESOLVED"
-            alert["message"] += " -> [REMOVIDO/MITIGADO PELO SOC]"
-            count += 1
-    
-    if count > 0:
-        msg_rem = f"Remediação concluída: {count} ameaças de {target_type} neutralizadas."
-        logging.info(f"[REMEDIATION] {msg_rem}")
-        return jsonify({"status": "remediated", "count": count})
-    
-    return jsonify({"status": "no_active_threats_found"}), 404
-
-# ================= DASHBOARD =================
-@app.route("/")
+@app.route('/')
 def index():
-    return render_template("index.html")
+    return render_template('index.html')
 
-@app.route("/api/alerts")
-def alerts():
+@app.route('/api/alerts')
+def get_alerts():
     return jsonify(alerts_history)
 
-# ================= MAIN =================
+def run_monitor():
+    if not os.path.exists(TARGET_DIR): os.makedirs(TARGET_DIR)
+    event_handler = DashboardHandler()
+    observer = Observer()
+    observer.schedule(event_handler, TARGET_DIR, recursive=False)
+    observer.start()
+    try:
+        while True: time.sleep(1)
+    except: observer.stop()
+
 if __name__ == "__main__":
-    # Rodando em 0.0.0.0 para permitir conexões externas se necessário
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    
+    # Monitoramento em background
+    monitor_thread = Thread(target=run_monitor)
+    monitor_thread.daemon = True
+    monitor_thread.start()
+    
+    app.run(host="0.0.0.0", port=port)
