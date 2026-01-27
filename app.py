@@ -85,9 +85,13 @@ def run_monitor():
     except: observer.stop()
 
 if __name__ == "__main__":
-
+    # O Render define a porta automaticamente na variável de ambiente PORT
+    port = int(os.environ.get("PORT", 5000))
+    
+    # Inicia o monitor em background
     monitor_thread = Thread(target=run_monitor)
     monitor_thread.daemon = True
     monitor_thread.start()
     
-    app.run(debug=False, port=5000)
+    # IMPORTANTE: host="0.0.0.0" permite que o Render encontre o app
+    app.run(host="0.0.0.0", port=port)
