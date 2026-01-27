@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SOC Dashboard</title>
+    <meta http-equiv="refresh" content="5"> <style>
+        body { background: #1a1a1a; color: #00ff00; font-family: 'Courier New'; padding: 20px; }
+        .alert-card { border-left: 5px solid #ff0000; background: #262626; margin: 10px 0; padding: 15px; }
+        .time { color: #888; font-size: 0.8em; }
+        .type-MODIFICAÇÃO { color: #ffa500; }
+        .type-CRÍTICO { color: #ff0000; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>🛡️ SOC MONITORING DASHBOARD</h1>
+    <div id="alerts">
+        </div>
+    <script>
+        async function loadAlerts() {
+            const response = await fetch('/api/alerts');
+            const data = await response.json();
+            const div = document.getElementById('alerts');
+            div.innerHTML = data.map(a => `
+                <div class="alert-card">
+                    <span class="time">[${a.time}]</span> 
+                    <span class="type-${a.type}">${a.type}</span>: ${a.message}
+                </div>
+            `).join('');
+        }
+        setInterval(loadAlerts, 2000); // Atualiza a lista via API
+        loadAlerts();
+    </script>
+</body>
+</html>
