@@ -3,35 +3,51 @@ import os
 import random
 import requests
 
-# --- CONFIGURAÇÃO ---
-RENDER_URL = "https://soc-monitor.onrender.com/api/inject" # Troque pela sua URL
+# --- CONFIGURAÇÃO (Troque pela sua URL real do Render) ---
+RENDER_URL = "https://soc-monitor.onrender.com/api/inject" 
 TARGET_DIR = "./monitorar"
 
 def notify_render(tipo, msg):
     try:
+        # Envia o alerta para o Dashboard na Nuvem
         requests.post(RENDER_URL, json={"type": tipo, "message": msg}, timeout=5)
-    except:
-        print("[!] Falha ao notificar o dashboard remoto.")
+    except Exception as e:
+        print(f"[!] Erro ao notificar Render: {e}")
 
 def simulate_advanced_attack():
     if not os.path.exists(TARGET_DIR): os.makedirs(TARGET_DIR)
     
-    print("[*] Iniciando ataque híbrido (Local + Nuvem)...")
+    print("-" * 50)
+    print("[*] INICIANDO ATAQUE HÍBRIDO: LOCAL -> RENDER")
+    print("-" * 50)
     
-    # FASE 1
+    # FASE 1: Infiltração (Criação de arquivos)
+    created_files = []
     for i in range(2):
-        filename = f"malware_{i}.exe"
-        with open(os.path.join(TARGET_DIR, filename), "w") as f: f.write("virus")
-        notify_render("INFILTRAÇÃO", f"Payload implantado: {filename}")
+        filename = f"malware_detectado_{i}.exe"
+        path = os.path.join(TARGET_DIR, filename)
+        with open(path, "w") as f: f.write("conteudo_malicioso_simulado")
+        created_files.append(path)
+        
+        print(f"[+] Criando: {filename}")
+        notify_render("INFILTRAÇÃO", f"Arquivo suspeito plantado: {filename}")
         time.sleep(2)
 
-    # FASE 2
-    notify_render("RANSOMWARE", "Criptografia em massa iniciada no host local.")
+    # FASE 2: Ransomware (Modificação)
+    print("[!] Simulando criptografia de arquivos...")
+    notify_render("RANSOMWARE", "Atividade de criptografia detectada no host local.")
     time.sleep(2)
 
-    # FASE 3
-    notify_render("LIMPEZA", "Removendo rastros e logs do sistema.")
-    print("[OK] Ataque concluído e Dashboard notificado.")
+    # FASE 3: LIMPEZA REAL (Apaga os arquivos da pasta)
+    print("[*] Fase de Limpeza: Removendo evidências locais...")
+    for path in created_files:
+        if os.path.exists(path):
+            os.remove(path)
+            print(f"[-] Removido: {os.path.basename(path)}")
+    
+    notify_render("LIMPEZA", "Ataque finalizado. Rastros removidos da máquina alvo.")
+    print("-" * 50)
+    print("[OK] Sucesso! Verifique seu Dashboard e o Telegram.")
 
 if __name__ == "__main__":
     simulate_advanced_attack()

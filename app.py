@@ -11,19 +11,22 @@ from dotenv import load_dotenv
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+# Configurações Iniciais
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TARGET_DIR = "./monitorar"
 
 app = Flask(__name__)
 alerts_history = [] 
 
+# Log de Auditoria Forense
 logging.basicConfig(filename='soc_audit.log', level=logging.INFO, 
                     format='%(asctime)s | %(message)s')
 
 def send_telegram_alert(message):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": f"⚠️ SOC DASHBOARD ALERT:\n{message}"}
+    payload = {"chat_id": CHAT_ID, "text": f"⚠️ SOC ALERT:\n{message}"}
     try:
         requests.post(url, json=payload, timeout=5)
     except Exception as e:
@@ -39,21 +42,28 @@ def get_file_hash(path):
     except:
         return None
 
-# --- NOVA ROTA PARA RECEBER ATAQUES EXTERNOS ---
+# Rota para receber ataques do seu computador local
 @app.route('/api/inject', methods=['POST'])
 def inject_alert():
-    data = request.get_json()
-    alert_type = data.get("type", "REMOTO")
-    msg = data.get("message", "Alerta recebido via API")
-    
-    new_alert = {
-        "time": datetime.now().strftime("%H:%M:%S"),
-        "type": alert_type,
-        "message": msg
-    }
-    alerts_history.insert(0, new_alert)
-    logging.info(f"[EXTERNAL-{alert_type}] {msg}")
-    return jsonify({"status": "success"}), 200
+    try:
+        data = request.get_json()
+        alert_type = data.get("type", "REMOTO")
+        msg = data.get("message", "Alerta recebido via API")
+        
+        new_alert = {
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "type": alert_type,
+            "message": msg
+        }
+        alerts_history.insert(0, new_alert)
+        
+        # Faz o Telegram apitar quando o ataque vem do CMD
+        send_telegram_alert(f"[{alert_type}] {msg}")
+        
+        logging.info(f"[EXTERNAL-{alert_type}] {msg}")
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 class DashboardHandler(FileSystemEventHandler):
     def __init__(self):
@@ -91,11 +101,10 @@ def get_alerts():
     return jsonify(alerts_history)
 
 def run_monitor():
-    path = "./monitorar"
-    if not os.path.exists(path): os.makedirs(path)
+    if not os.path.exists(TARGET_DIR): os.makedirs(TARGET_DIR)
     event_handler = DashboardHandler()
     observer = Observer()
-    observer.schedule(event_handler, path, recursive=False)
+    observer.schedule(event_handler, TARGET_DIR, recursive=False)
     observer.start()
     try:
         while True: time.sleep(1)
@@ -104,7 +113,7 @@ def run_monitor():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     
-    # Inicia o monitor local do servidor
+    # Monitoramento em background
     monitor_thread = Thread(target=run_monitor)
     monitor_thread.daemon = True
     monitor_thread.start()
