@@ -35,6 +35,30 @@ def simulate_attack():
 
     print("\n[*] Fim do ataque. Se o SOC estiver rodando, os arquivos acima já foram deletados por ele.")
     print("-" * 50)
+    
+def simulate_aggressive_attack():
+    print("🚀 Iniciando sequência de ataques...")
+    
+    for i in range(1, 6):
+        print(f"\n[#] Tentativa {i}: Enviando payload malicioso...")
+        try:
+            response = requests.post(RENDER_URL, json={
+                "type": "ATAQUE",
+                "message": f"Injeção de código tentativa {i}"
+            }, timeout=5)
+            
+            if response.status_code == 200:
+                print(f"✅ Ataque enviado (Servidor ainda processando...)")
+            elif response.status_code == 403:
+                print(f"❌ FALHA CRÍTICA: O SOC nos detectou! IP Bloqueado.")
+                print(f"Mensagem do Servidor: {response.json().get('error')}")
+                break # Sai do loop pois foi expulso
+                
+        except Exception as e:
+            print(f"Erro de conexão: {e}")
+        
+        time.sleep(2)
 
 if __name__ == "__main__":
     simulate_attack()
+    simulate_aggressive_attack()

@@ -1,11 +1,11 @@
 import time
 import hashlib
 import requests
-import os
 import logging
 from threading import Thread
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, abort
+import os, time, logging, hashlib
 from dotenv import load_dotenv
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -16,11 +16,30 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 TARGET_DIR = "./monitorar"
 
+BANNED_IPS = set()
+ATTACK_COUNTER = {}
+
 app = Flask(__name__)
 alerts_history = [] 
 
 logging.basicConfig(filename='soc_audit.log', level=logging.INFO, 
                     format='%(asctime)s | %(message)s')
+
+@app.before_request
+def firewall_check():
+    client_ip = request.remote_addr
+    if client_ip in BANNED_IPS:
+        return jsonify({"error": "IP BLOQUEADO PELO SOC", "reason": "Atividade Maliciosa Detectada"}), 403
+
+def monitor_and_block_ip(ip):
+    ATTACK_COUNTER[ip] = ATTACK_COUNTER.get(ip, 0) + 1
+    if ATTACK_COUNTER[ip] >= 3:
+        if ip not in BANNED_IPS:
+            BANNED_IPS.add(ip)
+            msg = f"🚫 FIREWALL: IP {ip} bloqueado após {ATTACK_COUNTER[ip]} tentativas de ataque."
+            #alerts_history.insert(0, {"time": datetime.now().strftime("%H:%M:%S"), "type": "FIREWALL", "message": msg})
+            send_telegram_alert(msg)
+            print(f"\n[!] {msg}\n")
 
 def send_telegram_alert(message):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -42,15 +61,21 @@ def get_file_hash(path):
 
 @app.route('/api/inject', methods=['POST'])
 def inject_alert():
+    client_ip = request.remote_addr
     try:
         data = request.get_json()
         alert_type = data.get("type", "REMOTO")
         msg = data.get("message", "Alerta recebido")
         
+        # Monitora se é um ataque para possível bloqueio
+        if alert_type in ["ATAQUE", "RANSOMWARE", "INFILTRAÇÃO"]:
+            monitor_and_block_ip(client_ip)
+
         new_alert = {"time": datetime.now().strftime("%H:%M:%S"), "type": alert_type, "message": msg}
+        # alerts_history definido globalmente no seu código original
         alerts_history.insert(0, new_alert)
-        send_telegram_alert(f"[{alert_type}] {msg}")
-        return jsonify({"status": "success"}), 200
+        
+        return jsonify({"status": "success", "info": "SOC monitorando sua atividade"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -67,17 +92,23 @@ class DashboardHandler(FileSystemEventHandler):
     def on_created(self, event):
         if not event.is_directory:
             fname = os.path.basename(event.src_path)
-            self.add_alert("INTRUSÃO", f"Ameaça detectada: {fname}")
-            send_telegram_alert(f"Ameaça detectada: {fname}. Iniciando limpeza...")
             
-            # Simula tempo de análise e remove o arquivo
-            time.sleep(1) 
+            # 1. Alerta de Detecção
+            self.add_alert("INTRUSÃO", f"🚨 Ameaça detectada: {fname}. Analisando comportamento...")
+            send_telegram_alert(f"🚨 INTRUSO DETECTADO: {fname}. Iniciando protocolo de expulsão!")
+
+            # 2. Ação de Expulsão (Remediação)
+            time.sleep(1.5) # Simula o tempo de reação do sistema
             try:
                 os.remove(event.src_path)
-                self.add_alert("LIMPEZA", f"Arquivo malicioso {fname} removido com sucesso!")
-                send_telegram_alert(f"✅ Remediação concluída: {fname} excluído.")
+                
+                # 3. Confirmação de Sucesso (Isso deve aparecer no seu Dashboard)
+                msg_sucesso = f"🛡️ SISTEMA IMUNE: O arquivo {fname} foi destruído e o intruso expulso."
+                self.add_alert("REMEDIAÇÃO", msg_sucesso)
+                send_telegram_alert(f"✅ PROTOCOLO CONCLUÍDO: {fname} removido. Host limpo.")
+                print(f"[SOC ACTIVE RESPONSE] {msg_sucesso}") # Aparece no terminal do SOC
             except Exception as e:
-                self.add_alert("ERRO", f"Falha ao remover {fname}")
+                self.add_alert("FALHA", f"❌ Falha ao expulsar intruso: {fname}")
 
     def on_modified(self, event):
         if not event.is_directory:
@@ -96,7 +127,14 @@ class DashboardHandler(FileSystemEventHandler):
 def index(): return render_template('index.html')
 
 @app.route('/api/alerts')
-def get_alerts(): return jsonify(alerts_history)
+def get_alerts(): 
+    return jsonify(alerts_history)
+
+@app.route('/api/reset_firewall')
+def reset_firewall():
+    BANNED_IPS.clear()
+    ATTACK_COUNTER.clear()
+    return "🛡️ Firewall Resetado! IPs liberados para novos testes.", 200
 
 def run_monitor():
     if not os.path.exists(TARGET_DIR): os.makedirs(TARGET_DIR)
