@@ -1,73 +1,66 @@
-# 🛡️ SOC File Integrity Monitor (FIM) & Dashboard
+# 🛡️ SOC File Integrity Monitor (FIM) & Hybrid Dashboard
 
-Este projeto simula uma operação real de um **SOC (Security Operations Center)** focado em **Monitoramento de Integridade de Arquivos (FIM)**. Ele utiliza Python para detectar alterações em ativos críticos em tempo real, valida a integridade via criptografia (Hashes) e notifica o analista através de um Dashboard Web e alertas no Telegram.
+Este projeto simula uma operação real de um **SOC (Security Operations Center)** focado em **Monitoramento de Integridade de Arquivos (FIM)**. A solução utiliza Python para detectar alterações em ativos críticos, valida a integridade via criptografia (Hashes) e centraliza os eventos em um Dashboard na nuvem com alertas integrados via Telegram.
 
-## 📋 O que aconteceu? (Arquitetura do Projeto)
+## 📋 Arquitetura do Sistema
 
-O projeto evoluiu de um script simples para uma solução completa de monitoramento:
+O projeto utiliza uma arquitetura híbrida que separa a detecção (Agente Local) da visualização e alerta (Cloud):
 
-1. **Monitoramento Ativo:** Utilizamos a biblioteca `watchdog` para "vigiar" a pasta `./monitorar` através de APIs nativas do sistema operacional (Windows).
-2. **Validação por Hash (SHA-256):** Para evitar falsos positivos, o sistema gera uma "impressão digital" única para cada arquivo. Se o conteúdo mudar, o Hash muda, e o SOC detecta a violação de integridade. 3.  **Notificação e Resposta:** Ao detectar um incidente, o sistema executa duas ações:
-* Envia um alerta instantâneo via **Telegram Bot API**.
-* Registra o evento no **Dashboard Web** (Flask) para visualização centralizada.
-
-
-3. **Simulação de Ataque:** Criamos um script que simula o comportamento de um **Ransomware**, realizando criptografia (modificação em massa) e limpeza de evidências (deleção).
+1. **Monitoramento de Baixo Nível:** Utiliza a biblioteca `watchdog` para interagir com as APIs nativas do sistema operacional, monitorando eventos de criação, modificação e deleção de arquivos em tempo real.
+2. **Análise de Integridade (SHA-256):** Implementa verificações de hash para garantir que o conteúdo dos arquivos não foi adulterado, eliminando falsos positivos comuns em monitoramentos baseados apenas em metadados.
+3. **Comunicação Híbrida (Agente -> Cloud):** O agente local envia pacotes de dados via requisições `POST` para uma API Flask hospedada no **Render**, simulando o comportamento de um EDR/SIEM enviando logs para um console central.
+4. **Resposta e Visibilidade:** O servidor centralizado processa as requisições, popula o **Dashboard Web** em tempo real e dispara notificações críticas via **Telegram Bot API**.
 
 ## 🚀 Tecnologias Utilizadas
 
 * **Linguagem:** Python 3.x
-* **Framework Web:** Flask (Dashboard)
-* **Bibliotecas:** `watchdog` (Monitoramento), `requests` (API Telegram), `hashlib` (Criptografia), `python-dotenv` (Segurança).
+* **Framework Web:** Flask (Dashboard & API Receptor)
+* **Monitoramento:** Watchdog (Eventos de Sistema de Arquivos)
+* **Segurança:** Hashlib (SHA-256) e Python-dotenv (Gestão de Variáveis de Ambiente)
+* **Comunicação:** Requests (Integração de APIs e Webhooks)
 
 ## 📂 Estrutura do Repositório
 
-* `app.py`: O "coração" do SOC. Roda o monitoramento e o servidor do Dashboard.
-* `attack_sim.py`: Script de Red Team para testar as defesas.
-* `templates/index.html`: Interface visual do analista SOC.
-* `.env`: Armazena credenciais sensíveis (Token e Chat ID).
-* `soc_audit.log`: Arquivo de auditoria forense para registro persistente de todos os eventos.
+* `app.py`: Servidor centralizado e Dashboard. Gerencia o monitoramento e recebe alertas externos.
+* `attack_sim.py`: Script de Red Team/Simulação. Realiza o ataque local e notifica a nuvem.
+* `templates/index.html`: Interface do analista SOC para monitoramento visual.
+* `.env`: Configurações sensíveis (Tokens de API e IDs de Chat).
+* `soc_audit.log`: Registro persistente para análise forense posterior.
 
 ## 🛠️ Como Executar
 
-1. **Prepare o Ambiente Virtual:**
+1. **Configuração do Ambiente:**
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
-
-```
-
-
-2. **Instale as Dependências:**
-```bash
 pip install -r requirements.txt
 
 ```
 
 
-3. **Configure suas Credenciais:**
-Crie um arquivo `.env` com seu `TELEGRAM_TOKEN` e `TELEGRAM_CHAT_ID`.
-4. **Inicie o SOC:**
+2. **Variáveis de Ambiente:**
+Configure o arquivo `.env` com suas credenciais do Telegram. No **Render**, configure estas chaves na aba *Environment Variables*.
+3. **Inicialização:**
+Execute o servidor central:
 ```bash
 python app.py
 
 ```
 
 
-5. **Simule um Incidente:**
-Em outro terminal, execute:
+4. **Simulação de Incidente:**
+Em um terminal local, execute o simulador para disparar alertas para a nuvem:
 ```bash
 python attack_sim.py
 
 ```
 
 
+## 🛡️ Habilidades Demonstradas
 
-## 🛡️ Demonstração de Habilidades (SOC N1 / Engenharia de Redes)
+Este projeto reflete competências essenciais para **Engenharia de Redes e Segurança**:
 
-Este projeto demonstra competência em:
-
-* **Automação de Segurança:** Substituição de tarefas manuais por scripts Python.
-* **Cibersegurança Prática:** Entendimento de Hashes, criptografia e vetores de ataque (Ransomware).
-* **Integração de APIs:** Comunicação entre sistemas de monitoramento e ferramentas de mensageria.
-* **Resposta a Incidentes:** Criação de logs de auditoria e Dashboards de visibilidade.
+* **Sistemas Distribuídos:** Comunicação entre processos locais e instâncias em nuvem via API.
+* **Defesa Ativa:** Implementação de controles de monitoramento de integridade (FIM).
+* **Automação de Resposta:** Redução do tempo de detecção e resposta (MTTD/MTTR) através de alertas automatizados.
+* **Visibilidade de Operações (NOC/SOC):** Criação de dashboards para gestão de incidentes.
